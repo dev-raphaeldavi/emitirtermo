@@ -4,11 +4,12 @@ from docxtpl import DocxTemplate
 import io
 import re
 import unicodedata
+import os
 
-# 1. CONFIGURAÇÃO DA PÁGINA (Modernizada)
+# 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="Central PISF - Eixo Leste", page_icon="💧", layout="wide")
 
-# CSS Customizado para uma aparência mais profissional e limpa
+# CSS Customizado
 st.markdown("""
     <style>
     .main-header {
@@ -54,11 +55,9 @@ def normalizar_coluna(txt):
 
 @st.cache_data(ttl=300)
 def carregar_planilha():
-    # Mantém o formato texto (preserva 0001/2026 intacto)
     df = pd.read_csv(URL, skiprows=5, dtype=str, keep_default_na=False)
     df = df.astype(str)
     
-    # Normaliza colunas
     df.columns = [normalizar_coluna(c) for c in df.columns]
     
     if 'ID' in df.columns:
@@ -69,8 +68,12 @@ def carregar_planilha():
 try:
     df = carregar_planilha()
     
-    # Criação das Abas de Navegação (Design Moderno)
-    aba_termo, aba_materiais = st.tabs(["📄 Termos de Responsabilidade", "🛠️ Ficha de Materiais (Kits)"])
+    # Criação das 3 Abas
+    aba_termo, aba_materiais, aba_projetos = st.tabs([
+        "📄 Termos de Responsabilidade", 
+        "🛠️ Ficha de Materiais (Kits)", 
+        "📐 Projetos de Captação"
+    ])
 
     # ==========================================================
     # ABA 1: TERMO DE RESPONSABILIDADE
@@ -115,7 +118,7 @@ try:
                 st.error("ID não localizado.")
 
     # ==========================================================
-    # ABA 2: FICHA DE MATERIAIS (PARAMETRIZADA)
+    # ABA 2: FICHA DE MATERIAIS
     # ==========================================================
     with aba_materiais:
         st.markdown("#### Emissão da Ficha de Materiais")
@@ -131,7 +134,6 @@ try:
             if not registro_mat.empty:
                 dados_mat = registro_mat.iloc[0].to_dict()
                 
-                # REGRAS DE PARAMETRIZAÇÃO
                 sistema = str(dados_mat.get('SISTEMA', '')).strip().upper()
                 estaca = str(dados_mat.get('ESTACA', '')).strip().upper()
                 
@@ -142,7 +144,6 @@ try:
                     template_ficha = "template_pisf-ATERRO.docx"
                     tipo_perfil = "Aterro (Sistema por Gravidade)"
                 elif sistema == 'BOMBEAMENTO':
-                    # Checa se a palavra "RESERVAT" está contida na estaca (cobre Reservatório, RESERVATORIO, etc)
                     if 'RESERVAT' in estaca:
                         template_ficha = "template_pisf-RES.docx"
                         tipo_perfil = "Reservatório (Bombeamento em Reservatório)"
@@ -150,7 +151,6 @@ try:
                         template_ficha = "template_pisf-BOMBEAMENTO.docx"
                         tipo_perfil = "Bombeamento (Captação Direta no Canal)"
                 
-                # Layout de Exibição
                 st.success(f"✅ Usuário: **{dados_mat.get('PROPRIETARIO', 'Não informado')}**")
                 
                 cm1, cm2, cm3 = st.columns(3)
@@ -159,7 +159,6 @@ try:
                 cm3.metric("Ficha Selecionada", tipo_perfil.split(' ')[0] if tipo_perfil else "Erro")
 
                 if template_ficha:
-                    # Caixa de Informação com Design
                     st.markdown(f'<div class="info-box"><strong>⚙️ Análise do Sistema:</strong> Detectamos o perfil <strong>{tipo_perfil}</strong>. O documento será gerado usando a base <code>{template_ficha}</code>.</div>', unsafe_allow_html=True)
                     
                     if st.button("🚀 Gerar Ficha de Materiais (Word)", type="primary", key="btn_mat"):
@@ -177,11 +176,40 @@ try:
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                             )
                         except Exception as e:
-                            st.error(f"Erro ao carregar o template. Certifique-se de que o arquivo '{template_ficha}' está na mesma pasta que o código. Detalhe: {e}")
+                            st.error(f"Erro ao carregar o template. Certifique-se de que o arquivo '{template_ficha}' está na mesma pasta. Detalhe: {e}")
                 else:
-                    st.warning("⚠️ Atenção: Não foi possível determinar o template automaticamente. Verifique se a coluna 'SISTEMA' na planilha está preenchida corretamente como 'Gravidade' ou 'Bombeamento'.")
+                    st.warning("⚠️ Atenção: Não foi possível determinar o template automaticamente. Verifique se a coluna 'SISTEMA' na planilha está preenchida corretamente.")
             else:
                 st.error("ID não localizado.")
+
+    # ==========================================================
+    # ABA 3: PROJETOS DE CAPTAÇÃO (NOVO)
+    # ==========================================================
+    with aba_projetos:
+        st.markdown("#### Projetos de Captação Padronizada")
+        st.write("Baixe o arquivo PDF contendo os projetos técnicos e desenhos padronizados para as captações.")
+        
+        c_p1, c_p2, c_p3 = st.columns([1, 2, 1])
+        with c_p2:
+            st.info("📂 **Arquivo:** `projeto.pdf`\n\nEste documento contém os detalhamentos técnicos para instalação das estruturas.")
+            
+            # Verifica se o arquivo existe na pasta
+            caminho_projeto = "projeto.pdf"
+            
+            if os.path.exists(caminho_projeto):
+                with open(caminho_projeto, "rb") as pdf_file:
+                    pdf_bytes = pdf_file.read()
+                
+                st.download_button(
+                    label="📥 Baixar Projeto (PDF)",
+                    data=pdf_bytes,
+                    file_name="projeto.pdf",
+                    mime="application/pdf",
+                    type="primary",
+                    use_container_width=True # Deixa o botão largo e bonito na coluna
+                )
+            else:
+                st.warning("⚠️ O arquivo `projeto.pdf` ainda não foi adicionado ao sistema. Faça o upload dele para a mesma pasta do código fonte para habilitar o download.")
 
 except Exception as e:
     st.error(f"Erro fatal na aplicação: {e}")
