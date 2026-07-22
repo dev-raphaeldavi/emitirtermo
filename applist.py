@@ -55,7 +55,20 @@ def normalizar_coluna(txt):
 
 @st.cache_data(ttl=300)
 def carregar_planilha():
-    df = pd.read_csv(URL, skiprows=5, dtype=str, keep_default_na=False)
+    # 1. Criamos um "disfarce" de navegador
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    # 2. Passamos esse disfarce no parâmetro storage_options
+    df = pd.read_csv(
+        URL, 
+        skiprows=5, 
+        dtype=str, 
+        keep_default_na=False,
+        storage_options=headers
+    )
+    
     df = df.astype(str)
     
     df.columns = [normalizar_coluna(c) for c in df.columns]
