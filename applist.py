@@ -5,7 +5,7 @@ import io
 import re
 import unicodedata
 import os
-import urllib.request # <-- Adicionado para garantir o download seguro
+import requests  # <-- Usando requests para requisições HTTP mais robustas
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="Central PISF - Eixo Leste", page_icon="💧", layout="wide")
@@ -43,7 +43,7 @@ st.markdown('<div class="main-header">Central de Emissão de Documentos PISF</di
 st.markdown('<div class="sub-header">Regularização de Captações de Pequenos Usuários - Eixo Leste</div>', unsafe_allow_html=True)
 st.divider()
 
-URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSQk-RTbvVDPlwxIJFaEKeR1WPRaNSFGioF8DIYD1_mQ-M6a7O20-7TXmx8fBAlDg/pub?gid=502195603&single=true&output=csv"
+URL_BASE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSQk-RTbvVDPlwxIJFaEKeR1WPRaNSFGioF8DIYD1_mQ-M6a7O20-7TXmx8fBAlDg/pub"
 
 # 2. FUNÇÕES DE TRATAMENTO
 def normalizar_coluna(txt):
@@ -56,29 +56,39 @@ def normalizar_coluna(txt):
 
 @st.cache_data(ttl=300)
 def carregar_planilha():
-    # 1. Fazemos a requisição HTTP bruta usando a biblioteca nativa do Python
-    req = urllib.request.Request(
-        URL, 
-        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-    )
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    }
     
-    with urllib.request.urlopen(req) as response:
-        csv_data = response.read().decode('utf-8')
+    # Tenta obter o CSV usando a URL com gid
+    url_primaria = f"{URL_BASE}?gid=502195603&single=true&output=csv"
     
-    # 2. Entregamos o texto em formato CSV para o Pandas ler através do io.StringIO
+    try:
+        res = requests.get(url_primaria, headers=headers, timeout=10)
+        res.raise_for_status()
+        csv_content = res.text
+    except Exception:
+        # Fallback: Tenta a URL direta sem o parâmetro single=true caso ocorra erro 400
+        url_secundaria = f"{URL_BASE}?output=csv"
+        res = requests.get(url_secundaria, headers=headers, timeout=10)
+        res.raise_for_status()
+        csv_content = res.text
+
+    # Leitura do CSV baixado via StringIO
     df = pd.read_csv(
-        io.StringIO(csv_data), 
+        io.StringIO(csv_content), 
         skiprows=5, 
         dtype=str, 
         keep_default_na=False
     )
     
     df = df.astype(str)
-    
     df.columns = [normalizar_coluna(c) for c in df.columns]
     
     if 'ID' in df.columns:
         df['ID'] = df['ID'].str.replace('.0', '', regex=False).str.strip()
+        
     return df
 
 # 3. INTERFACE E LÓGICA DE ABAS
@@ -200,7 +210,7 @@ try:
                 st.error("ID não localizado.")
 
     # ==========================================================
-    # ABA 3: PROJETOS DE CAPTAÇÃO (NOVO)
+    # ABA 3: PROJETOS DE CAPTAÇÃO
     # ==========================================================
     with aba_projetos:
         st.markdown("#### Projetos de Captação Padronizada")
@@ -210,7 +220,6 @@ try:
         with c_p2:
             st.info("📂 **Arquivo:** `projeto.pdf`\n\nEste documento contém os detalhamentos técnicos para instalação das estruturas.")
             
-            # Verifica se o arquivo existe na pasta
             caminho_projeto = "projeto.pdf"
             
             if os.path.exists(caminho_projeto):
@@ -223,7 +232,7 @@ try:
                     file_name="projeto.pdf",
                     mime="application/pdf",
                     type="primary",
-                    use_container_width=True # Deixa o botão largo e bonito na coluna
+                    use_container_width=True
                 )
             else:
                 st.warning("⚠️ O arquivo `projeto.pdf` ainda não foi adicionado ao sistema. Faça o upload dele para a mesma pasta do código fonte para habilitar o download.")
