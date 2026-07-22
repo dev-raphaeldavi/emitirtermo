@@ -5,6 +5,7 @@ import io
 import re
 import unicodedata
 import os
+import urllib.request # <-- Adicionado para garantir o download seguro
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="Central PISF - Eixo Leste", page_icon="💧", layout="wide")
@@ -55,18 +56,21 @@ def normalizar_coluna(txt):
 
 @st.cache_data(ttl=300)
 def carregar_planilha():
-    # 1. Criamos um "disfarce" de navegador
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-    
-    # 2. Passamos esse disfarce no parâmetro storage_options
-    df = pd.read_csv(
+    # 1. Fazemos a requisição HTTP bruta usando a biblioteca nativa do Python
+    req = urllib.request.Request(
         URL, 
+        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+    )
+    
+    with urllib.request.urlopen(req) as response:
+        csv_data = response.read().decode('utf-8')
+    
+    # 2. Entregamos o texto em formato CSV para o Pandas ler através do io.StringIO
+    df = pd.read_csv(
+        io.StringIO(csv_data), 
         skiprows=5, 
         dtype=str, 
-        keep_default_na=False,
-        storage_options=headers
+        keep_default_na=False
     )
     
     df = df.astype(str)
